@@ -1,7 +1,6 @@
 <?php
 namespace Reqres\Module\Auth;
 
-use Reqres\Superglobals\POST;
 use Reqres\User;
 use Reqres\Request;
 use Reqres\Form;
@@ -9,7 +8,7 @@ use Reqres\Form;
 /**
  *
  * Этот модуль предназначен для работы с формой авторизации.
- * Внимание! ТОЛЬКО с представлением View процесса авторизации
+ * Внимание! ТОЛЬКО с представлением View авторизации
  * Controller и Model используется в самом проекте, через класс Reqres\User в котором прописывается весь механизм авторизации
  *
  * Подразумевается что любая страница может стать формой для авторизации
@@ -17,14 +16,30 @@ use Reqres\Form;
  * TODO Подразумевается, что возможна многоступенчатая авторизация
  *
  * Можно унаследовать как саму форму авторизации, с её полями, так и представление этой формы
- * Если в конструкторе прописать if(!User::info()) $this-> auth_login(); 					- откроется форма авторизации
+ * Если в конструкторе прописать if(!User::info()) $this-> mod_auth_login(); 					- откроется форма авторизации
  *
  * Этот модуль использует JS протокол "auth", который перехватывает запросы авторизации
  *
+ * Форма должна содержать 2 обязательтных поял login и password !!!
+ *
  */
-class Controller extends \Reqres\MVC\Controller 
+trait Controller
 {
 
+    /**
+     * 
+     * Метод проверки авторизации
+     * 
+     */
+    abstract function mod_auth_check();
+    
+    /**
+     * 
+     * Метод для возврата формы авторизации
+     * 
+     */
+    abstract function mod_auth_form();
+    
     /**
      *
      * Создаем форму авторизации
@@ -32,10 +47,10 @@ class Controller extends \Reqres\MVC\Controller
      * Её можно унаследовать, добавив в нее например поле SMS авторизацию
      *
      */
-    protected function auth_form_template()
+    protected function mod_auth_form_template($form)
     {
         
-		return (new Form)
+		return $form
             -> method('POST')
             -> field('login', 'String')
             	-> fkey('login')
@@ -57,75 +72,76 @@ class Controller extends \Reqres\MVC\Controller
      * Скрипт авторизации
      *
      */
-	function auth_login()
+	function mod_auth_login()
 	{
-
-        // получаем форму
-        $this-> auth_form = $this-> auth_form();
         
-        // если форма выполнена
-        if($this-> auth_form-> check('login')){
 
-            // разлогиниваемся
-            //User::logout();
-            
-            // получаем данные
-            $this-> values = $this-> auth_form-> valuesUser();
+        // заносим форму в переменную
+        $this-> mod_auth_form = $this-> mod_auth_form();
+        
+        // проверяем форму (!) не авторизацию, а форму
+        if($this-> mod_auth_form-> check('login')){
+
+            // получаем данные на проверку
+            $this-> values = $this-> mod_auth_form-> valuesUser();
             
             // если введены верные данные
             if(User::login($this-> values['login'], $this-> values['password'])){
 
-                // если AJAX то возвращаем текущий статус авторизации
-                $this-> auth_status();
+                // сохраняем 
+                setcookie('mod_auth_last_login', $this-> values['login'], 0, '/');
+                
+                // возвращаем текущий статус авторизации
+                $this-> mod_auth_status();
 
             } else {
                 
 				// добавляем ошибку в форму
-                $this-> auth_form-> errorAdd('Неудачная авторизация', 'password');
+                $this-> mod_auth_form-> errorAdd('Неудачная авторизация', 'password');
 
             }
             
         }
         
-		// получаем ошибки    
-        $this-> errors = $this-> auth_form-> errors();
+		// получаем ошибки
+        $this-> errors = $this-> mod_auth_form-> errors();
         
-        if(!is_null($this-> errors)){
+        if(!empty($this-> errors)){
             
             // авторизация не пройдена
-            $this-> auth_error();          
+            $this-> mod_auth_error();          
             
         }
-        
+
         // если AJAX то возвращаем форму авторизации
-        $this-> auth_status();
+        $this-> mod_auth_status();
         
 	}
 
 
 	/**
      *
-     * Форма авторизации, либо данные авторизации
+     * Сюда мы поподаем во всех случаях, кроме случая ошибки в форме
      *
      */
-	protected function auth_status()
+	protected function mod_auth_status()
 	{
-
-        // авторизация не пройдена
-        $this-> info = User::info();
-		//$this-> info = false;
+	
+        // смотрим данные о пользователе
+        if(!$this-> info = User::info()) $this-> info = null;
         
         // если AJAX запрос
         if(Request::get()-> ajax()){
 
-            $this-> authed = (bool) $this-> info;
-            
-            $this-> view()-> auth_ajax();
+            // фэил
+            if(!$this-> info) $this-> view()-> mod_auth_ajax();
+            // успех
+            else $this-> view()-> mod_auth_ajax_response_success();
 
         }
 
         // открываем стандартную форму
-		$this-> view()-> auth_page();
+		$this-> view()-> mod_auth_page();
 
 	}
     
@@ -135,21 +151,19 @@ class Controller extends \Reqres\MVC\Controller
      * Ошибка авторизации
      *
      */
-	function auth_error()
+	function mod_auth_error()
 	{
 
-        // получаем данные авторизации
-        $this-> info = User::info();
-        
 		// если ajax запрос       
         if(Request::get()-> ajax()){
             
-            $this-> view()-> auth_ajax_error();
+            // фофч афшд
+            $this-> view()-> mod_auth_ajax_response_error();
             
         }
         
         // открываем стандартную форму
-		$this-> view()-> auth_page();        
+		$this-> view()-> mod_auth_page();
         
 	}
     
@@ -159,13 +173,15 @@ class Controller extends \Reqres\MVC\Controller
      * Страница формы авторизации
      *
      */
-	function auth_logout()
+	function mod_auth_logout()
 	{
 
 		User::logout();
 
-		// переходим на главную
-		header('Location: /');
+        if(!Request::get()-> ajax())
+            // переходим на главную
+            header('Location: /');
+        
 		exit;
 
 	}
