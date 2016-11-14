@@ -38,7 +38,7 @@ trait Controller
      * Метод для возврата формы авторизации
      * 
      */
-    abstract function mod_auth_form();
+    //abstract function mod_auth_form();
     
     /**
      *
@@ -47,10 +47,10 @@ trait Controller
      * Её можно унаследовать, добавив в нее например поле SMS авторизацию
      *
      */
-    protected function mod_auth_form_template($form)
+    protected function mod_auth_form_template()
     {
         
-		return $form
+		return (new Form)
             -> method('POST')
             -> field('login', 'String')
             	-> fkey('login')
@@ -75,9 +75,8 @@ trait Controller
 	function mod_auth_login()
 	{
         
-
         // заносим форму в переменную
-        $this-> mod_auth_form = $this-> mod_auth_form();
+        $this-> mod_auth_form = method_exists($this, 'mod_auth_form') ? $this-> mod_auth_form() : $this-> mod_auth_form_template();
         
         // проверяем форму (!) не авторизацию, а форму
         if($this-> mod_auth_form-> check('login')){
