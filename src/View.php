@@ -50,7 +50,7 @@ trait View
     function mod_auth_ajax_response_error()
     {
      
-		Response::json()
+		Response::JSON()
             -> protocol('form')
             -> data([
                 'errors' => $this-> errors,
@@ -69,7 +69,7 @@ trait View
     function mod_auth_ajax_response_success()
     {
      
-		Response::json()
+		Response::JSON()
             -> protocol('auth')
             -> data([
                 'info' => $this-> info,
