@@ -51,7 +51,7 @@ trait View
     {
      
 		Response::JSON()
-            -> protocol('form')
+            -> protocol('Form')
             -> data([
                 'errors' => $this-> errors,
                 'status' => 'error'
@@ -70,7 +70,7 @@ trait View
     {
      
 		Response::JSON()
-            -> protocol('auth')
+            -> protocol('Auth')
             -> data([
                 'info' => $this-> info,
                 'status' => 'success'
