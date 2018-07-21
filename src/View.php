@@ -34,7 +34,7 @@ trait View
             // пересылаем ответ с указанием протокола
             $e-> response()
                 // указываем протокол авторизации
-                -> protocol('auth')
+                -> protocol('Auth')
                 -> respond();
             
         }
@@ -51,10 +51,9 @@ trait View
     {
      
 		Response::JSON()
-            -> protocol('Form')
+            -> protocol('Form','Error')
             -> data([
                 'errors' => $this-> errors,
-                'status' => 'error'
             ])
             -> respond();
         
