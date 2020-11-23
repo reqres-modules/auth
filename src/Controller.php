@@ -1,37 +1,51 @@
 <?php
 namespace Reqres\Module\Auth;
 
-use Reqres\User;
-use Reqres\Request;
-use Reqres\Form;
+use Reqres\{Request, Form};
 
 /**
  *
- * Этот модуль предназначен для работы с формой авторизации.
- * Внимание! ТОЛЬКО с представлением View авторизации
- * Controller и Model используется в самом проекте, через класс Reqres\User в котором прописывается весь механизм авторизации
+ * Модуль предоставляет интерфейс для работы с простейшей формой авторизации
+ * Форма может быть кастомная, но должна содержать 2 обязательтных поля login и password
+ * На клиентской стороне используется протокол "Auth" и "Form" (нужно установить через yarn)
  *
- * Подразумевается что любая страница может стать формой для авторизации
  *
- * TODO Подразумевается, что возможна многоступенчатая авторизация
+ * Модуль НЕ занимается вопросами хранения хэшей пользователя
+ * Хэш запрашивается через абстрактный метод mod_auth_userhash($userid)
  *
- * Можно унаследовать как саму форму авторизации, с её полями, так и представление этой формы
- * Если в конструкторе прописать if(!User::info()) $this-> mod_auth_login(); 					- откроется форма авторизации
+ * Модуль НЕ занимается хранением статуса авторизации ни в сесси ни в куках
+ * Это функционал легко реализуется в приложении
  *
- * Этот модуль использует JS протокол "auth", который перехватывает запросы авторизации
+ * Подразумевается что любая страница приложения может стать формой для авторизации
+ * Достаточно в нужном месте вызвать mod_auth_required
  *
- * Форма должна содержать 2 обязательтных поял login и password !!!
+ * TODO Подразумевается, что возможна многоступенчатая авторизация через Reqres\Process
+ * ТОDO Можно добавить по желанию хранение в сессии статуса авторизациичерез $mod_auth_session = 'session_key'
+ * ТОDO Добавить проверку формы
  *
  */
 trait Controller
 {
 
+
     /**
      * 
-     * Метод проверки авторизации
+     * Метод получения данных пользователя 
+     * приложение может заглянуть в файл или БД
+     * Вернуть должен в формате
+     *
+	 * [ 'password' => '...', 'algo' => 'bcrypt' ]
      * 
      */
-    abstract function mod_auth_check();
+	protected abstract function mod_auth_userhash($userid);
+    
+    /**
+     *
+     * Успешная авторизация
+     *
+     */    
+    protected abstract function mod_auth_on_success($userid, $userdata);
+    
     
     /**
      * 
@@ -67,122 +81,65 @@ trait Controller
         
     }
 
+    
     /**
      *
-     * Скрипт авторизации
+     * Логика авторизации
      *
      */
-	function mod_auth_login()
+	protected function mod_auth_required()
 	{
         
         // заносим форму в переменную
         $this-> mod_auth_form = method_exists($this, 'mod_auth_form') ? $this-> mod_auth_form() : $this-> mod_auth_form_template();
         
-        // проверяем форму (!) не авторизацию, а форму
+        // TODO
+        //if(!$this-> mod_auth_form['login']-> notempty() ||  $this-> mod_auth_form['password']-> notempty())
+            
+        // проверяем форму
         if($this-> mod_auth_form-> check('login')){
 
             // получаем данные на проверку
-            $this-> values = $this-> mod_auth_form-> valuesUser();
+            $this-> mod_auth_values = $this-> mod_auth_form-> values();
+
+            // запрашиваем данные пользователя через абстрактный метод
+            if($userdata = $this-> mod_auth_userhash($this-> mod_auth_values['login']))
+                // проверяем его пароль
+	            if($this-> model()-> mod_auth_check_password($this-> mod_auth_values['password'], $userdata)){
+                    
+                    // сообщаем приложению что авторизация пройдена
+                    $this-> mod_auth_on_success($this-> mod_auth_values['login'], $userdata);
+                    // выводим пезультат
+		            $this-> view()-> mod_auth_success();
+                    
+                }
+
             
-            // если введены верные данные
-            if(User::login($this-> values['login'], $this-> values['password'])){
+            $this-> mod_auth_form-> errorAdd('Неудачная авторизация', 'password');
 
-                // сохраняем 
-                setcookie('mod_auth_last_login', $this-> values['login'], 0, '/');
-                
-                // возвращаем текущий статус авторизации
-                $this-> mod_auth_status();
-
-            } else {
-                
-				// добавляем ошибку в форму
-                $this-> mod_auth_form-> errorAdd('Неудачная авторизация', 'password');
-
-            }
-            
         }
         
 		// получаем ошибки
-        $this-> errors = $this-> mod_auth_form-> errors();
-        
-        if(!empty($this-> errors)){
-            
-            // авторизация не пройдена
-            $this-> mod_auth_error();          
-            
-        }
+        if($this-> errors = $this-> mod_auth_form-> errors())
+            $this-> view()-> mod_auth_error();
 
-        // если AJAX то возвращаем форму авторизации
-        $this-> mod_auth_status();
-        
-	}
-
-
-	/**
-     *
-     * Сюда мы поподаем во всех случаях, кроме случая ошибки в форме
-     *
-     */
-	protected function mod_auth_status()
-	{
-	
-        // смотрим данные о пользователе
-        if(!$this-> info = User::info()) $this-> info = null;
-        
-        // если AJAX запрос
-        if(Request::get()-> ajax()){
-
-            // фэил
-            if(!$this-> info) $this-> view()-> mod_auth_ajax();
-            // успех
-            else $this-> view()-> mod_auth_ajax_response_success();
-
-        }
-
-        // открываем стандартную форму
-		$this-> view()-> mod_auth_page();
-
-	}
-    
-    
-	/**
-     *
-     * Ошибка авторизации
-     *
-     */
-	function mod_auth_error()
-	{
-
-		// если ajax запрос       
-        if(Request::get()-> ajax()){
-            
-            // фофч афшд
-            $this-> view()-> mod_auth_ajax_response_error();
-            
-        }
         
         // открываем стандартную форму
-		$this-> view()-> mod_auth_page();
-        
-	}
-    
-    
+        $this-> view()-> mod_auth_required();            
+ 
+    }
+
 	/**
      *
-     * Страница формы авторизации
+     * Логика logout TODO
      *
-     */
+     * /
 	function mod_auth_logout()
 	{
 
-		User::logout();
-
-        if(!Request::get()-> ajax())
-            // переходим на главную
-            header('Location: /');
-        
-		exit;
 
 	}
+    
+    /**/
 
 }

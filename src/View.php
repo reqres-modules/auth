@@ -2,7 +2,7 @@
 namespace Reqres\Module\Auth;
 
 use Reqres\Response;
-use Reqres\Exception\ExResponse;
+use Reqres\Exception;
 
 trait View
 {
@@ -13,69 +13,104 @@ trait View
      *
      */
     abstract function mod_auth_page();
-    
 
+    
     /**
      *
-     * AJAX ответ в случае остутствия авторизации
+     * Требуется авторизация
      *
      */
-    function mod_auth_ajax()
+	function mod_auth_required()
     {
-    
-        try {
-            
-            // отлавливаем стандартный ответ
-            $this-> mod_auth_page();
-            
-            
-        } catch(ExResponse $e){
-
-            // пересылаем ответ с указанием протокола
-            $e-> response()
-                // указываем протокол авторизации
-                -> protocol('Auth')
-                -> respond();
-            
-        }
         
+        // выводим страницу формы авторизации
+		return $this-> mod_auth_page();        
         
     }
     
     /**
      *
-     * AJAX ответ в случае ошибки
+     * Требуется авторизация
      *
      */
-    function mod_auth_ajax_response_error()
+    function ajax_mod_auth_required()
     {
-     
-		Response::JSON()
-            -> protocol('Form','Error')
+
+        // пересылаем ответ с указанием протокола
+        return Response::JSON()
+            // указываем протокол авторизации
+            -> protocol('Auth', 'Required')
+            -> data([
+                'authHTML' => $this-> view()-> mod_auth_page()-> block('body').'',
+                'message' => 'Требуется авторизация'
+            ]);
+        ;
+
+    }
+    
+
+    /**
+     *
+     * Ошибка при выполнении формы авторизации
+     *
+     */    
+    function mod_auth_error()
+    {
+        
+        return $this-> mod_auth_page();
+        
+    }
+
+    
+    /**
+     *
+     * Ошибка при выполнении формы авторизации
+     *
+     */
+    function ajax_mod_auth_error()
+    {
+        
+		return Response::JSON()
+            -> protocol('Form', 'Error')
             -> data([
                 'errors' => $this-> errors,
             ])
-            -> respond();
+        ;
         
-    }
-
+    }    
+    
     
     /**
      *
-     * AJAX ответ в случае успешной авторизации
+     * Успешная авторизация
      *
-     */
-    function mod_auth_ajax_response_success()
+     */    
+    function mod_auth_success($info = [])
     {
-     
-		Response::JSON()
-            -> protocol('Auth')
-            -> data([
-                'info' => $this-> info,
-                'status' => 'success'
-            ])
-            -> respond();
-        
+
+        // перезагружаем страницу
+		Request::reload();
+
     }
+    
+
+    /**
+     *
+     * Удачная авторизация
+     *
+     */    
+    function ajax_mod_auth_success($info = [])
+    {
+        
+		return Response::JSON()
+            -> protocol('Auth', 'Success')
+            -> data([
+                'info' => $info,
+                'message' => 'Вы были успешно авторизированы'
+            ])
+        ;
+    }
+
+    /**/
     
 }
