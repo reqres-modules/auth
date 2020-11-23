@@ -42,6 +42,7 @@ trait View
             -> protocol('Auth', 'Required')
             -> data([
                 'authHTML' => $this-> view()-> mod_auth_page()-> block('body').'',
+                'require' => 'mod_auth_modal',
                 'message' => 'Требуется авторизация'
             ]);
         ;
