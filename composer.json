@@ -1,5 +1,5 @@
 {
-    "name": "bumax/module-auth",
+    "name": "reqres/module-auth",
     "description": "Reqres Authorization Module",
     "license": "MIT",
     "authors": [
